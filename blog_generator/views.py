@@ -1,8 +1,6 @@
 import json
 import os
-import json
-import assemblyai as aai
-import yt_dlp
+import re
 
 from django.shortcuts import render
 from django.contrib.auth.models import User
@@ -11,8 +9,8 @@ from django.shortcuts import redirect
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
-from django.conf import settings
 from mistralai import Mistral
+from youtube_transcript_api import YouTubeTranscriptApi, NoTranscriptFound, TranscriptsDisabled
 from .models import BlogPost
 # Create your views here.
 @login_required
@@ -42,7 +40,7 @@ def generate_blog(request):
         #get transcript
         transcription = get_transcription(yt_link)
         if not transcription:
-            return JsonResponse({'error': "Failed to get transcript"}, status=500)
+            return JsonResponse({'error': "Impossible de récupérer la transcription. La vidéo n'a peut-être pas de sous-titres disponibles."}, status=500)
         #use mistral to generate the blog  
         blog_content = generate_blog_from_transcription(transcription)
         if not blog_content:
@@ -61,42 +59,51 @@ def generate_blog(request):
     else:
         return JsonResponse({'error': 'Invalid Request method.'}, status=405)
     
-def yt_title(link):
-    with yt_dlp.YoutubeDL({'quiet': True}) as ydl:
-        info = ydl.extract_info(link, download=False)
-    return info.get('title', '')
+def extract_video_id(url):
+    """Extrait l'ID YouTube depuis n'importe quel format d'URL."""
+    patterns = [
+        r'(?:v=|\/)([0-9A-Za-z_-]{11})',
+        r'youtu\.be\/([0-9A-Za-z_-]{11})',
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, url)
+        if match:
+            return match.group(1)
+    return None
 
-def download_audio(link):
-    output_template = os.path.join(settings.MEDIA_ROOT, '%(title)s.%(ext)s')
-    ydl_opts = {
-        'format': 'bestaudio/best',
-        'outtmpl': output_template,
-        'postprocessors': [{
-            'key': 'FFmpegExtractAudio',
-            'preferredcodec': 'mp3',
-        }],
-        'quiet': True,
-    }
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(link, download=True)
-        filename = ydl.prepare_filename(info)
-    base, _ = os.path.splitext(filename)
-    return base + '.mp3'
+def yt_title(link):
+    """Récupère le titre via la transcription (évite yt-dlp bloqué par YouTube)."""
+    try:
+        video_id = extract_video_id(link)
+        transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+        # Le titre n'est pas dispo via transcript API, on retourne l'ID en fallback
+        return f"YouTube Video ({video_id})"
+    except Exception:
+        return "YouTube Video"
 
 def get_transcription(link):
-    audio_file = download_audio(link) 
-    aai.settings.api_key = os.getenv("ASSEMBLYAI_API_KEY")
-
-    config = aai.TranscriptionConfig(speech_models=["universal-2"])
-    transcriber = aai.Transcriber()
-    transcript = transcriber.transcribe(audio_file, config=config)
+    """Récupère la transcription via les sous-titres YouTube (pas de téléchargement audio)."""
+    video_id = extract_video_id(link)
+    if not video_id:
+        return None
 
     try:
-        os.remove(audio_file)
-    except OSError:
-        pass
-    
-    return transcript.text
+        # Cherche d'abord en français, puis anglais, puis n'importe quelle langue
+        transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+        try:
+            transcript = transcript_list.find_transcript(['fr', 'en'])
+        except Exception:
+            transcript = transcript_list.find_generated_transcript(['fr', 'en'])
+
+        entries = transcript.fetch()
+        return " ".join([entry.text for entry in entries])
+
+    except TranscriptsDisabled:
+        return None
+    except NoTranscriptFound:
+        return None
+    except Exception:
+        return None
 
 def generate_blog_from_transcription(transcription):
     api_key = os.getenv("MISTRAL_API_key")

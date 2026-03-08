@@ -87,16 +87,9 @@ def yt_title(link):
     video_id = extract_video_id(link)
     return f"YouTube Video ({video_id})" if video_id else "YouTube Video"
 
-def get_transcription(link):
-    """Récupère la transcription via les sous-titres YouTube (API v1.x)."""
-    from youtube_transcript_api import YouTubeTranscriptApi, NoTranscriptFound, TranscriptsDisabled
+def _get_cookies_path():
+    """Retourne le chemin du fichier cookies si disponible."""
     from django.conf import settings
-    import os
-
-    video_id = extract_video_id(link)
-    if not video_id:
-        return None
-
     cookies_path = os.path.join(settings.BASE_DIR, 'temp_cookies.txt')
     cookies_content = os.getenv('YT_COOKIES_CONTENT')
 
@@ -104,39 +97,157 @@ def get_transcription(link):
         with open(cookies_path, 'w') as f:
             f.write(cookies_content)
 
-    api = YouTubeTranscriptApi()
-    try:
-        #  Essai avec les langues favorites
-        try:
-            if os.path.exists(cookies_path):
-                data = api.fetch(video_id, languages=['fr', 'en'], cookies=cookies_path)
-                return " ".join([s.text for s in data])
-            else:
-                data = api.fetch(video_id, languages=['fr', 'en'])
-                return " ".join([s.text for s in data])
-        except Exception:
-            pass
+    return cookies_path if os.path.exists(cookies_path) else None
 
-        # Fallback : on liste toutes les langues disponibles et on prend la premiere
-        if os.path.exists(cookies_path):
-            transcript_list = api.list(video_id, cookies=cookies_path)
-            transcripts = list(transcript_list)
-        else:
-            transcript_list = api.list(video_id)
-            transcripts = list(transcript_list)
-            
-        if not transcripts:
+
+def _get_transcription_ytdlp(video_id):
+    """Récupère la transcription via yt-dlp (meilleur contournement anti-bot)."""
+    import subprocess
+    import tempfile
+    import glob as glob_module
+    import logging
+
+    logger = logging.getLogger(__name__)
+    url = f"https://www.youtube.com/watch?v={video_id}"
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        cmd = [
+            'yt-dlp',
+            '--skip-download',
+            '--write-subs',
+            '--write-auto-subs',
+            '--sub-langs', 'fr,en,fr.*,en.*',
+            '--sub-format', 'vtt',
+            '--no-warnings',
+            '-o', os.path.join(tmpdir, '%(id)s'),
+        ]
+
+        cookies_path = _get_cookies_path()
+        if cookies_path:
+            cmd.extend(['--cookies', cookies_path])
+
+        cmd.append(url)
+
+        try:
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=60
+            )
+            if result.returncode != 0:
+                logger.warning(f"yt-dlp failed: {result.stderr[:500]}")
+                return None
+        except subprocess.TimeoutExpired:
+            logger.warning("yt-dlp timeout")
+            return None
+        except FileNotFoundError:
+            logger.error("yt-dlp not found in PATH")
             return None
 
+        # Chercher les fichiers de sous-titres générés
+        sub_files = glob_module.glob(os.path.join(tmpdir, '*.vtt'))
+        if not sub_files:
+            sub_files = glob_module.glob(os.path.join(tmpdir, '*.srt'))
+        if not sub_files:
+            return None
+
+        # Préférer fr > en > premier disponible
+        chosen = sub_files[0]
+        for sf in sub_files:
+            if '.fr.' in sf:
+                chosen = sf
+                break
+            elif '.en.' in sf:
+                chosen = sf
+
+        return _parse_vtt(chosen)
+
+
+def _parse_vtt(filepath):
+    """Parse un fichier VTT/SRT et retourne le texte brut sans doublons."""
+    with open(filepath, 'r', encoding='utf-8') as f:
+        content = f.read()
+
+    lines = content.split('\n')
+    text_lines = []
+    seen = set()
+
+    for line in lines:
+        line = line.strip()
+        # Ignorer les headers VTT, lignes de timing, lignes vides et tags
+        if not line or line == 'WEBVTT' or '-->' in line or line.startswith('NOTE'):
+            continue
+        if re.match(r'^\d+$', line):
+            continue
+        # Nettoyer les tags HTML/VTT
+        clean = re.sub(r'<[^>]+>', '', line)
+        clean = clean.strip()
+        if clean and clean not in seen:
+            seen.add(clean)
+            text_lines.append(clean)
+
+    return ' '.join(text_lines) if text_lines else None
+
+
+def _get_transcription_api(video_id):
+    """Récupère la transcription via youtube-transcript-api."""
+    from youtube_transcript_api import YouTubeTranscriptApi, NoTranscriptFound, TranscriptsDisabled
+
+    cookies_path = _get_cookies_path()
+    api = YouTubeTranscriptApi()
+
+    try:
+        kwargs = {'languages': ['fr', 'en']}
+        if cookies_path:
+            kwargs['cookies'] = cookies_path
+        data = api.fetch(video_id, **kwargs)
+        return " ".join([s.text for s in data])
+    except Exception:
+        pass
+
+    # Fallback : lister toutes les langues disponibles
+    try:
+        list_kwargs = {}
+        if cookies_path:
+            list_kwargs['cookies'] = cookies_path
+        transcript_list = api.list(video_id, **list_kwargs)
+        transcripts = list(transcript_list)
+        if not transcripts:
+            return None
         data = transcripts[0].fetch()
         return " ".join([s.text for s in data])
-
-    except TranscriptsDisabled:
-        return None
-    except NoTranscriptFound:
+    except (TranscriptsDisabled, NoTranscriptFound):
         return None
     except Exception:
         return None
+
+
+def get_transcription(link):
+    """Récupère la transcription avec stratégie multi-fallback.
+    
+    Stratégie : youtube-transcript-api → yt-dlp (meilleur anti-bot).
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+
+    video_id = extract_video_id(link)
+    if not video_id:
+        return None
+
+    # Stratégie 1 : youtube-transcript-api (rapide, mais bloqué sur certains serveurs)
+    logger.info(f"[Transcription] Essai youtube-transcript-api pour {video_id}")
+    result = _get_transcription_api(video_id)
+    if result:
+        logger.info("[Transcription] Succès via youtube-transcript-api")
+        return result
+
+    # Stratégie 2 : yt-dlp (plus lent mais meilleur contournement anti-bot)
+    logger.info(f"[Transcription] Fallback yt-dlp pour {video_id}")
+    result = _get_transcription_ytdlp(video_id)
+    if result:
+        logger.info("[Transcription] Succès via yt-dlp")
+        return result
+
+    logger.warning(f"[Transcription] Échec total pour {video_id}")
+    return None
 
 def generate_blog_from_transcription(transcription):
     api_key = os.getenv("MISTRAL_API_key")

@@ -1,52 +1,104 @@
 {% load static %}
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}YT_BlogAI{% endblock %}</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;500;600;700&family=Source+Code+Pro:wght@400;600&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
     <link rel="stylesheet" href="{% static 'blog_generator/css/main.css' %}">
     {% block head_extra %}{% endblock %}
 </head>
-<body class="flex flex-col min-h-screen text-gray-100">
+<body class="flex flex-col min-h-screen bg-background text-foreground antialiased">
 
     <!-- Navbar -->
-    <nav class="relative sticky top-0 z-50 px-4 sm:px-6 py-3 sm:py-4 flex justify-between items-center"
-         style="background:rgba(7,7,15,.85); backdrop-filter:blur(20px);">
-        <a href="/" class="text-xl sm:text-2xl font-black gradient-text tracking-tight">
-            <i class="fa-solid fa-bolt"></i> YTB-AI
-        </a>
-        <div class="nav-actions flex items-center">
-            {% if user.is_authenticated %}
-                <span class="nav-username text-gray-500 text-sm font-medium mr-2">{{ user.username }}</span>
-                <a href="/blog-list"><button class="btn-outline text-sm py-2 px-3 sm:px-4">My Blogs</button></a>
-                <a href="/logout" class="ml-2"><button class="btn-danger text-sm py-2 px-3 sm:px-4">Logout</button></a>
-            {% else %}
-                <a href="/login"><button class="btn-outline text-sm py-2 px-3 sm:px-4">Login</button></a>
-                <a href="/signup" class="ml-2"><button class="btn-primary text-sm py-2 px-3 sm:px-4">Sign up</button></a>
-            {% endif %}
-        </div>
-    </nav>
+    <header class="sticky top-0 z-50 w-full nav-glass">
+        <nav class="container mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
+            <!-- Logo - solid color -->
+            <a href="/" class="logo">
+                <i class="fa-solid fa-bolt"></i>
+                <span>YTB-AI</span>
+            </a>
+
+            <div class="nav-actions flex items-center gap-3">
+                <!-- Theme Toggle -->
+                <button id="themeToggle" class="theme-toggle-btn" aria-label="Toggle theme">
+                    <i class="fa-solid fa-sun theme-icon-light"></i>
+                    <i class="fa-solid fa-moon theme-icon-dark"></i>
+                </button>
+                
+                {% if user.is_authenticated %}
+                    <span class="nav-username text-sm text-muted-foreground hidden sm:inline">{{ user.username }}</span>
+                    <div class="separator-vertical h-5 hidden sm:block"></div>
+                    <a href="/blog-list"><button class="btn-outline btn-sm">My Blogs</button></a>
+                    <a href="/logout"><button class="btn-danger btn-sm">Logout</button></a>
+                {% else %}
+                    <a href="/login"><button class="btn-outline btn-sm">Login</button></a>
+                    <a href="/signup"><button class="btn-primary btn-sm">Sign up</button></a>
+                {% endif %}
+            </div>
+        </nav>
+    </header>
 
     <!-- Main content -->
-    <main class="flex-grow container mx-auto px-4 py-10">
+    <main class="flex-1 container mx-auto px-4 py-8 sm:py-12">
         {% block content %}{% endblock %}
     </main>
 
     <!-- Footer -->
-    <footer class="text-center py-5 text-gray-600 text-sm border-t" style="border-color:rgba(255,255,255,.06)">
-        Powered by <a href="https://koddyb.github.io/my-portfolio/"
-                      class="text-violet-400 hover:text-violet-300 transition font-semibold">KoddyB</a>
+    <footer class="footer-border border-t py-4">
+        <div class="container mx-auto px-4 text-center text-sm">
+            Powered by <a href="https://koddyb.github.io/my-portfolio/" class="footer-link">KoddyB</a>
+        </div>
     </footer>
 
     <!-- Toast container -->
     <div id="toast-container" role="region" aria-live="polite"></div>
 
     <script>
+        /* ── Theme Toggle System ── */
+        (function() {
+            const htmlElement = document.documentElement;
+            const themeToggleBtn = document.getElementById('themeToggle');
+            
+            function initTheme() {
+                const savedTheme = localStorage.getItem('theme');
+                const theme = savedTheme || 'light';
+                
+                if (theme === 'dark') {
+                    htmlElement.classList.add('dark');
+                } else {
+                    htmlElement.classList.remove('dark');
+                }
+            }
+            
+            function toggleTheme() {
+                const isDark = htmlElement.classList.contains('dark');
+                
+                if (isDark) {
+                    htmlElement.classList.remove('dark');
+                    localStorage.setItem('theme', 'light');
+                } else {
+                    htmlElement.classList.add('dark');
+                    localStorage.setItem('theme', 'dark');
+                }
+            }
+            
+            initTheme();
+            
+            if (themeToggleBtn) {
+                themeToggleBtn.addEventListener('click', toggleTheme);
+            }
+        })();
+        
         /* ── Toast system ── */
-        const _T_ICONS  = {
+        const _T_ICONS = {
             success: '<i class="fa-solid fa-circle-check"></i>',
             error:   '<i class="fa-solid fa-circle-xmark"></i>',
             warning: '<i class="fa-solid fa-triangle-exclamation"></i>',
@@ -79,7 +131,7 @@
         }
 
         /* ── Confirm modal ── */
-        function showConfirm({ icon = '<i class="fa-solid fa-trash-can fa-lg"></i>', title = 'Confirmation', message = '', confirmText = 'Confirmer', confirmClass = 'btn-danger', onConfirm }) {
+        function showConfirm({ icon = '<i class="fa-solid fa-trash-can"></i>', title = 'Confirmation', message = '', confirmText = 'Confirmer', confirmClass = 'btn-danger', onConfirm }) {
             const overlay = document.createElement('div');
             overlay.className = 'modal-overlay';
             overlay.innerHTML = `
@@ -88,8 +140,8 @@
                     <div class="modal-title">${title}</div>
                     <div class="modal-message">${message}</div>
                     <div class="modal-actions">
-                        <button class="btn-outline text-sm py-2 px-4 modal-cancel">Annuler</button>
-                        <button class="${confirmClass} text-sm py-2 px-4 modal-confirm">${confirmText}</button>
+                        <button class="btn-outline btn-sm modal-cancel">Annuler</button>
+                        <button class="${confirmClass} btn-sm modal-confirm">${confirmText}</button>
                     </div>
                 </div>
             `;

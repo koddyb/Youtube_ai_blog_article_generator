@@ -6,49 +6,60 @@
 {% endblock %}
 
 {% block content %}
-<!-- Hero -->
-<div class="max-w-3xl mx-auto text-center mb-12">
-    <div class="inline-block px-3 py-1 rounded-full text-xs font-bold tracking-widest uppercase mb-4"
-         style="background:rgba(124,58,237,.15); color:#a78bfa; border:1px solid rgba(124,58,237,.3)">
-        AI-Powered &middot; YouTube <i class="fa-solid fa-arrow-right fa-xs mx-1"></i> Blog
+<!-- Hero Section -->
+<div class="max-w-2xl mx-auto text-center mb-10">
+    <div class="hero-badge mb-4">
+        <i class="fa-solid fa-sparkles"></i>
+        AI-Powered · YouTube → Blog
     </div>
-    <h1 class="text-4xl sm:text-5xl font-black leading-tight mb-4">
-        Transform <span class="gradient-text">YouTube Videos</span><br>Into Viral Blog Posts
+    <h1 class="text-3xl sm:text-4xl font-bold leading-tight mb-4 text-foreground">
+        Transform YouTube Videos<br>
+        <span class="text-primary">Into Blog Posts</span>
     </h1>
-    <p class="text-gray-400 text-lg max-w-xl mx-auto">
+    <p class="text-muted-foreground max-w-lg mx-auto">
         Paste any YouTube URL and our AI will generate a fully structured, SEO-optimized blog article in seconds.
     </p>
 </div>
 
 <!-- Generator Card -->
-<div class="max-w-3xl mx-auto card card-padded">
-    <!-- Input -->
-    <div class="mb-6">
-        <label class="block text-gray-400 text-sm font-semibold mb-2 uppercase tracking-widest">YouTube Video URL</label>
-        <div class="generator-input-row">
-            <input type="url" id="youtubeLink" placeholder="https://youtube.com/watch?v=..."
+<div class="max-w-2xl mx-auto">
+    <div class="card card-padded">
+        <div class="card-header p-0 mb-6">
+            <label class="card-description text-xs font-medium uppercase tracking-wider">YouTube Video URL</label>
+        </div>
+        
+        <div class="generator-input-row mb-6">
+            <input type="url" id="youtubeLink" 
+                   placeholder="https://youtube.com/watch?v=..."
                    class="input-dark flex-1">
             <button id="generateBlogButton" class="btn-primary">
-                <i class="fa-solid fa-bolt mr-1"></i> Generate
+                <i class="fa-solid fa-bolt"></i>
+                Generate
             </button>
         </div>
-    </div>
 
-    <!-- Spinner -->
-    <div id="loadingCircle" class="spinner" style="display:none;"></div>
+        <!-- Spinner -->
+        <div id="loadingCircle" class="spinner" style="display:none;"></div>
 
-    <!-- Result section -->
-    <section id="resultSection" style="display:none;">
-        <div class="result-header">
-            <h2 class="text-lg font-bold gradient-text">Generated Article</h2>
-            <div class="result-header-actions">
-                <button id="copyMarkdownBtn" class="btn-outline text-xs py-1.5 px-3">Copy Markdown</button>
-                <button id="copyFormattedBtn" class="btn-outline text-xs py-1.5 px-3"
-                        style="border-color:rgba(56,189,248,.3); color:#38bdf8;">Copy Formatted</button>
+        <!-- Result section -->
+        <section id="resultSection" style="display:none;">
+            <div class="separator mb-6"></div>
+            
+            <div class="result-header mb-6">
+                <h2 class="text-sm font-semibold text-foreground">Generated Article</h2>
+                <div class="result-header-actions">
+                    <button id="copyMarkdownBtn" class="btn-outline btn-sm">
+                        <i class="fa-regular fa-copy"></i> Markdown
+                    </button>
+                    <button id="copyFormattedBtn" class="btn-outline btn-sm btn-accent">
+                        <i class="fa-regular fa-file-code"></i> HTML
+                    </button>
+                </div>
             </div>
-        </div>
-        <div id="blogContend" class="prose-dark"></div>
-    </section>
+            
+            <div id="blogContend" class="prose-dark"></div>
+        </section>
+    </div>
 </div>
 {% endblock %}
 
@@ -70,7 +81,7 @@
         loadingCircle.style.display = "block";
         resultSection.style.display = "none";
         blogContend.innerHTML = '';
-        showToast('Génération en cours…', 'info', 'Traitement', 8000);
+        showToast('Génération en cours…', 'info', 'Traitement', 3000);
 
         try {
             const response = await fetch("/generate-blog", {
@@ -83,7 +94,7 @@
             if (!response.ok) {
                 if (data.error === 'duplicate') {
                     showToast(
-                        `Vous avez déjà un article pour cette vidéo. <a href="/blog-details/${data.article_id}/" style="color:#38bdf8;" class="underline font-semibold">Voir l'article <i class="fa-solid fa-arrow-right fa-xs ml-1"></i></a>`,
+                        `Vous avez déjà un article pour cette vidéo. <a href="/blog-details/${data.article_id}/" class="underline font-medium">Voir l'article →</a>`,
                         'warning', 'Article existant', 7000
                     );
                 } else {

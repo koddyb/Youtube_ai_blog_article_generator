@@ -62,7 +62,8 @@ def generate_blog(request):
 
 
 def blog_list(request):
-    blog_articles = BlogPost.objects.filter(user=request.user)
+    blog_articles = BlogPost.objects.filter(user=request.user).order_by('-created_at')
+    
     return render(request, "all-blogs.html", {'blog_articles': blog_articles})
 
 

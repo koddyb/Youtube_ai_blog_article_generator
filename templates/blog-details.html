@@ -68,7 +68,7 @@
 {% block scripts %}
 <script>
     const contentEl = document.querySelector('.markdown-content');
-    contentEl.innerHTML = marked.parse(contentEl.dataset.content);
+    contentEl.innerHTML = DOMPurify.sanitize(marked.parse(contentEl.dataset.content));
 
     document.getElementById("deleteForm").addEventListener("submit", e => {
         e.preventDefault();

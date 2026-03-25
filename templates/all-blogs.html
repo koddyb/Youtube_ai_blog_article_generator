@@ -64,7 +64,7 @@
 {% block scripts %}
 <script>
     document.querySelectorAll('.markdown-content').forEach(el => {
-        el.innerHTML = marked.parse(el.dataset.content);
+        el.innerHTML = DOMPurify.sanitize(marked.parse(el.dataset.content));
     });
 
     document.querySelectorAll('.delete-form').forEach(form => {

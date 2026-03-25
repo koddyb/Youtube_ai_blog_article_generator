@@ -13,9 +13,16 @@
 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
     <link rel="stylesheet" href="{% static 'blog_generator/css/main.css' %}">
+    <!-- DOMPurify pour la protection XSS -->
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
     {% block head_extra %}{% endblock %}
 </head>
 <body class="flex flex-col min-h-screen bg-background text-foreground antialiased">
+    <!-- CSRF Token for AJAX requests -->
+    {% csrf_token %}
+    <script>
+        const CSRF_TOKEN = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    </script>
 
     <!-- Navbar -->
     <header class="sticky top-0 z-50 w-full nav-glass">

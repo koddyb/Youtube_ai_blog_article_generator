@@ -6,12 +6,18 @@
 {% endblock %}
 
 {% block content %}
-<div class="max-w-2xl mx-auto">
+<div class="max-w-4xl mx-auto">
     <!-- Header -->
-    <div class="blogs-list-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
+    <div class="blogs-list-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
             <h1 class="text-2xl font-bold text-foreground">My Articles</h1>
-            <p class="text-sm text-muted-foreground mt-1">All your AI-generated blog posts</p>
+            <p class="text-sm text-muted-foreground mt-1">
+                {% if page_obj.paginator.count > 0 %}
+                    {{ page_obj.paginator.count }} article{{ page_obj.paginator.count|pluralize }}
+                {% else %}
+                    All your AI-generated blog posts
+                {% endif %}
+            </p>
         </div>
         <a href="/">
             <button class="btn-primary">
@@ -19,6 +25,53 @@
                 New Article
             </button>
         </a>
+    </div>
+
+    <!-- Search & Sort Bar -->
+<div class="card p-5 mb-6">
+        <form method="GET" action="{% url 'blog-list' %}">
+            <div class="grid grid-cols-1 sm:grid-cols-5 gap-3 items-center">
+                <div class="relative sm:col-span-3">
+                <input type="text" name="q" value="{{ search_query }}" 
+                    placeholder="Rechercher un article..." 
+                    class="input-dark w-full pl-4 pr-16 py-2.5">
+                    <i class="fa-solid fa-search absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none"></i>
+
+                    {% if search_query %}
+                    <a href="{% url 'blog-list' %}" class="absolute right-10 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition">
+                        <i class="fa-solid fa-xmark text-sm"></i>
+                    </a>
+                    {% endif %}
+    
+</div>
+                
+                <div class="sm:col-span-2 flex items-center gap-2">
+                    <div class="sm:flex items-center gap-2 text-sm text-muted-foreground whitespace-nowrap">
+                        <i class="fa-solid fa-arrow-down-wide-short"></i>
+                        <span>Trier</span>
+                    </div>
+                    
+                    <select name="sort" class="input-dark text-sm py-2.5 px-3 w-full" onchange="this.form.submit()">
+                        <option value="-created_at" {% if sort_by == '-created_at' %}selected{% endif %}>Plus récent</option>
+                        <option value="created_at" {% if sort_by == 'created_at' %}selected{% endif %}>Plus ancien</option>
+                        <option value="title_az" {% if sort_by == 'title_az' %}selected{% endif %}>A → Z</option>
+                        <option value="title_za" {% if sort_by == 'title_za' %}selected{% endif %}>Z → A</option>
+                    </select>
+                    
+                    <button type="submit" class="btn-primary py-2.5 px-4 flex-shrink-0">
+                        <i class="fa-solid fa-search"></i>
+                    </button>
+                </div>
+                
+            </div>
+        </form>
+        
+        {% if search_query %}
+        <div class="mt-4 pt-4 border-t border-border flex items-center gap-2 text-sm">
+            <span class="text-muted-foreground">Résultats pour</span>
+            <span class="bg-primary/10 text-primary px-2 py-0.5 rounded font-medium">"{{ search_query }}"</span>
+        </div>
+        {% endif %}
     </div>
 
     <!-- Articles -->
@@ -32,7 +85,7 @@
                     </h3>
                     <div class="text-sm line-clamp-3 markdown-content prose-dark text-muted-foreground"
                          data-content="{{ article.generated_content }}"></div>
-                    <p class="text-xs mt-3 text-muted-foreground">{{ article.created_at|date:"M d, Y" }}</p>
+                    <p class="text-xs mt-3 text-muted-foreground">{{ article.created_at|date:"d M Y" }}</p>
                 </a>
                 <form method="POST" action="{% url 'delete-blog' article.id %}" class="delete-form shrink-0">
                     {% csrf_token %}
@@ -45,8 +98,22 @@
         {% empty %}
         <div class="card text-center py-12 px-6">
             <div class="text-3xl mb-4 text-muted-foreground">
+                {% if search_query %}
+                <i class="fa-solid fa-search"></i>
+                {% else %}
                 <i class="fa-solid fa-pen-nib"></i>
+                {% endif %}
             </div>
+            {% if search_query %}
+            <p class="font-semibold text-foreground mb-2">Aucun résultat</p>
+            <p class="text-sm text-muted-foreground mb-6">Aucun article ne correspond à "{{ search_query }}"</p>
+            <a href="{% url 'blog-list' %}">
+                <button class="btn-outline">
+                    <i class="fa-solid fa-arrow-left"></i>
+                    Voir tous les articles
+                </button>
+            </a>
+            {% else %}
             <p class="font-semibold text-foreground mb-2">No articles yet</p>
             <p class="text-sm text-muted-foreground mb-6">Generate your first blog article from a YouTube video.</p>
             <a href="/">
@@ -55,9 +122,60 @@
                     Generate My First Article
                 </button>
             </a>
+            {% endif %}
         </div>
         {% endfor %}
     </div>
+
+    <!-- Pagination -->
+    {% if page_obj.has_other_pages %}
+    <div class="flex items-center justify-center gap-2 mt-8">
+        <!-- Previous -->
+        {% if page_obj.has_previous %}
+        <a href="?page={{ page_obj.previous_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}{% if sort_by %}&sort={{ sort_by }}{% endif %}">
+            <button class="btn-outline btn-sm">
+                <i class="fa-solid fa-chevron-left"></i>
+            </button>
+        </a>
+        {% else %}
+        <button class="btn-outline btn-sm opacity-50 cursor-not-allowed" disabled>
+            <i class="fa-solid fa-chevron-left"></i>
+        </button>
+        {% endif %}
+
+        <!-- Page Numbers -->
+        <div class="flex items-center gap-1">
+            {% for num in page_obj.paginator.page_range %}
+                {% if page_obj.number == num %}
+                <span class="px-3 py-1 rounded bg-primary text-primary-foreground text-sm font-medium">{{ num }}</span>
+                {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                <a href="?page={{ num }}{% if search_query %}&q={{ search_query }}{% endif %}{% if sort_by %}&sort={{ sort_by }}{% endif %}" 
+                   class="px-3 py-1 rounded hover:bg-muted text-sm text-muted-foreground hover:text-foreground transition">
+                    {{ num }}
+                </a>
+                {% endif %}
+            {% endfor %}
+        </div>
+
+        <!-- Next -->
+        {% if page_obj.has_next %}
+        <a href="?page={{ page_obj.next_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}{% if sort_by %}&sort={{ sort_by }}{% endif %}">
+            <button class="btn-outline btn-sm">
+                <i class="fa-solid fa-chevron-right"></i>
+            </button>
+        </a>
+        {% else %}
+        <button class="btn-outline btn-sm opacity-50 cursor-not-allowed" disabled>
+            <i class="fa-solid fa-chevron-right"></i>
+        </button>
+        {% endif %}
+    </div>
+    
+    <!-- Page Info -->
+    <p class="text-center text-xs text-muted-foreground mt-3">
+        Page {{ page_obj.number }} sur {{ page_obj.paginator.num_pages }}
+    </p>
+    {% endif %}
 </div>
 {% endblock %}
 

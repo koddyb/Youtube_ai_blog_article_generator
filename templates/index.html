@@ -86,10 +86,7 @@
         try {
             const response = await fetch("/generate-blog", {
                 method: "POST",
-                headers: { 
-                    "Content-Type": "application/json",
-                    "X-CSRFToken": CSRF_TOKEN
-                },
+                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ link: youtubeLink })
             });
             const data = await response.json();
@@ -105,7 +102,7 @@
                 }
             } else {
                 rawMarkdown = data.content;
-                blogContend.innerHTML = DOMPurify.sanitize(marked.parse(rawMarkdown));
+                blogContend.innerHTML = marked.parse(rawMarkdown);
                 resultSection.style.display = "block";
                 showToast('Article généré avec succès !', 'success', 'Génération terminée');
             }

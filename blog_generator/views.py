@@ -76,9 +76,44 @@ def generate_blog(request):
 
 @login_required
 def blog_list(request):
-    blog_articles = BlogPost.objects.filter(user=request.user).order_by('-created_at')
+    from django.core.paginator import Paginator
+    from django.db.models import Q
     
-    return render(request, "all-blogs.html", {'blog_articles': blog_articles})
+    # Get query parameters
+    search_query = request.GET.get('q', '').strip()
+    sort_by = request.GET.get('sort', '-created_at')
+    
+    # Validate sort parameter
+    valid_sorts = {
+        '-created_at': '-created_at',      # Plus récent
+        'created_at': 'created_at',         # Plus ancien
+        'title_az': 'youtube_title',        # A-Z
+        'title_za': '-youtube_title',       # Z-A
+    }
+    order_field = valid_sorts.get(sort_by, '-created_at')
+    
+    # Filter and sort
+    blog_articles = BlogPost.objects.filter(user=request.user)
+    
+    if search_query:
+        blog_articles = blog_articles.filter(
+            Q(youtube_title__icontains=search_query) |
+            Q(generated_content__icontains=search_query)
+        )
+    
+    blog_articles = blog_articles.order_by(order_field)
+    
+    # Pagination (10 per page)
+    paginator = Paginator(blog_articles, 10)
+    page_number = request.GET.get('page', 1)
+    page_obj = paginator.get_page(page_number)
+    
+    return render(request, "all-blogs.html", {
+        'blog_articles': page_obj,
+        'page_obj': page_obj,
+        'search_query': search_query,
+        'sort_by': sort_by,
+    })
 
 
 @login_required

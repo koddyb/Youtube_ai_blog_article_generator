@@ -808,7 +808,7 @@ html.dark, .dark {
     align-items: center;
     gap: 0.375rem;
     padding: 0.25rem 0.75rem;
-    background: var(--primary);
+    background: color-mix(in srgb, var(--primary), transparent 30%);
     color: var(--primary-foreground);
     border: 1px solid var(--primary);
     border-radius: var(--radius);

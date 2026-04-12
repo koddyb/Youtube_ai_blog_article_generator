@@ -50,6 +50,13 @@ def _get_transcription_api(video_id: str) -> str | None:
 
     # v1.2.x : cookies via http_client (requests.Session)
     api_kwargs = {}
+    proxy_url = os.environ.get('PROXY_URL')
+    if proxy_url:
+        api_kwargs['proxies'] = {
+            'http': proxy_url,
+            'https': proxy_url
+        }
+
     if cookies_path:
         cj = http.cookiejar.MozillaCookieJar(cookies_path)
         try:
@@ -105,6 +112,10 @@ def _get_transcription_ytdlp(video_id: str) -> str | None:
             '--ignore-no-formats-error',
             '-o', os.path.join(tmpdir, '%(id)s'),
         ]
+
+        proxy_url = os.environ.get('PROXY_URL')
+        if proxy_url:
+            cmd.extend(['--proxy', proxy_url])
 
         cookies_path = get_cookies_path()
         if cookies_path:

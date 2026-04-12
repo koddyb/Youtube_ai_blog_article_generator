@@ -86,7 +86,10 @@
         try {
             const response = await fetch("/generate-blog", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-CSRFToken": CSRF_TOKEN
+                },
                 body: JSON.stringify({ link: youtubeLink })
             });
             const data = await response.json();

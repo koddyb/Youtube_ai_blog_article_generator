@@ -50,13 +50,6 @@ def _get_transcription_api(video_id: str) -> str | None:
 
     # v1.2.x : cookies via http_client (requests.Session)
     api_kwargs = {}
-    proxy_url = os.environ.get('PROXY_URL')
-    if proxy_url:
-        api_kwargs['proxies'] = {
-            'http': proxy_url,
-            'https': proxy_url
-        }
-
     if cookies_path:
         cj = http.cookiejar.MozillaCookieJar(cookies_path)
         try:
@@ -68,9 +61,11 @@ def _get_transcription_api(video_id: str) -> str | None:
             logger.warning(f"[transcript-api] Impossible de charger les cookies: {e}")
 
     api = YouTubeTranscriptApi(**api_kwargs)
+    proxy_url = os.environ.get('PROXY_URL')
+    proxies = {'http': proxy_url, 'https': proxy_url} if proxy_url else None
 
     try:
-        data = api.fetch(video_id, languages=['fr', 'en'])
+        data = api.fetch(video_id, languages=['fr', 'en'], proxies=proxies)
         return " ".join([s.text for s in data])
     except (TranscriptsDisabled, NoTranscriptFound) as e:
         logger.warning(f"[transcript-api] Pas de transcript pour {video_id}: {e}")
@@ -79,12 +74,12 @@ def _get_transcription_api(video_id: str) -> str | None:
 
     # Fallback : lister toutes les langues disponibles
     try:
-        transcript_list = api.list(video_id)
+        transcript_list = api.list(video_id, proxies=proxies)
         transcripts = list(transcript_list)
         if not transcripts:
             logger.warning(f"[transcript-api] Aucune langue disponible pour {video_id}")
             return None
-        data = transcripts[0].fetch()
+        data = transcripts[0].fetch(proxies=proxies)
         return " ".join([s.text for s in data])
     except (TranscriptsDisabled, NoTranscriptFound) as e:
         logger.warning(f"[transcript-api] Transcripts désactivés pour {video_id}: {e}")

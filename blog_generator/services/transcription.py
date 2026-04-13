@@ -22,22 +22,28 @@ logger = logging.getLogger(__name__)
 def get_transcription(link: str) -> str | None:
     """Récupère la transcription avec stratégie multi-fallback.
 
-    Stratégie : youtube-transcript-api → yt-dlp (meilleur anti-bot).
+    Stratégie : yt-dlp avec retries (proxy rotatif) → youtube-transcript-api (local only).
     """
     video_id = extract_video_id(link)
     if not video_id:
         return None
 
-    logger.info(f"[Transcription] Essai youtube-transcript-api pour {video_id}")
+    # Essayer yt-dlp avec plusieurs retries (proxy rotatif change d'IP à chaque fois)
+    logger.info(f"[Transcription] Essai yt-dlp pour {video_id}")
+    for attempt in range(3):
+        logger.info(f"[Transcription] yt-dlp tentative {attempt + 1}/3")
+        result = _get_transcription_ytdlp(video_id)
+        if result:
+            logger.info("[Transcription] Succès via yt-dlp")
+            return result
+        import time
+        time.sleep(2)  # Attendre avant retry
+
+    # Fallback: youtube-transcript-api (marche rarement sur Heroku)
+    logger.info(f"[Transcription] Fallback youtube-transcript-api pour {video_id}")
     result = _get_transcription_api(video_id)
     if result:
         logger.info("[Transcription] Succès via youtube-transcript-api")
-        return result
-
-    logger.info(f"[Transcription] Fallback yt-dlp pour {video_id}")
-    result = _get_transcription_ytdlp(video_id)
-    if result:
-        logger.info("[Transcription] Succès via yt-dlp")
         return result
 
     logger.warning(f"[Transcription] Échec total pour {video_id}")
@@ -128,7 +134,7 @@ def _get_transcription_ytdlp(video_id: str) -> str | None:
         proxy_url = os.environ.get('PROXY_URL')
         if proxy_url:
             cmd.extend(['--proxy', proxy_url])
-            logger.info(f"[yt-dlp] Proxy configuré: {proxy_url.split('@')[-1]}")
+            logger.info(f"[yt-dlp] Proxy: {proxy_url.split('@')[-1]}")
 
         cookies_path = get_cookies_path()
         if cookies_path:
@@ -138,10 +144,11 @@ def _get_transcription_ytdlp(video_id: str) -> str | None:
 
         try:
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
-            if result.returncode != 0:
-                logger.info(f"yt-dlp returncode={result.returncode}, checking for subtitle files anyway")
-                if result.stderr:
-                    logger.info(f"yt-dlp stderr: {result.stderr[:500]}")
+            logger.info(f"[yt-dlp] returncode={result.returncode}")
+            if result.stdout:
+                logger.info(f"[yt-dlp] stdout: {result.stdout[:500]}")
+            if result.stderr:
+                logger.error(f"[yt-dlp] stderr: {result.stderr[:1000]}")
         except subprocess.TimeoutExpired:
             logger.warning("yt-dlp timeout")
             return None
@@ -154,8 +161,10 @@ def _get_transcription_ytdlp(video_id: str) -> str | None:
         if not sub_files:
             sub_files = glob_module.glob(os.path.join(tmpdir, '*.srt'))
         if not sub_files:
-            logger.warning(f"yt-dlp n'a produit aucun fichier de sous-titres pour {video_id}")
+            logger.warning(f"[yt-dlp] Aucun fichier de sous-titres pour {video_id}")
             return None
+
+        logger.info(f"[yt-dlp] Fichiers trouvés: {sub_files}")
 
         # Préférer fr > en > premier disponible
         chosen = sub_files[0]

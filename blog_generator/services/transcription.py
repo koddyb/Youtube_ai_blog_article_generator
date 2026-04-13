@@ -49,10 +49,22 @@ def _get_transcription_api(video_id: str) -> str | None:
     cookies_path = get_cookies_path()
     proxy_url = os.environ.get('PROXY_URL')
 
+    logger.info(f"[transcript-api] Configuration - Proxy: {'activé' if proxy_url else 'désactivé'}")
+    if proxy_url:
+        logger.info(f"[transcript-api] Proxy URL: {proxy_url.split('@')[-1]}")  # Log sans credentials
+
     # Configurer la session requests avec proxy et cookies
     session = requests.Session()
     if proxy_url:
         session.proxies = {'http': proxy_url, 'https': proxy_url}
+        # Headers pour masquer le fait que c'est un script
+        session.headers.update({
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate',
+            'Connection': 'keep-alive',
+        })
 
     if cookies_path:
         cj = http.cookiejar.MozillaCookieJar(cookies_path)
@@ -105,12 +117,18 @@ def _get_transcription_ytdlp(video_id: str) -> str | None:
             '--no-check-formats',
             '--ignore-errors',
             '--ignore-no-formats-error',
+            # Options anti-bot
+            '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            '--add-header', 'Accept-Language:en-US,en;q=0.9',
+            '--sleep-requests', '1',
+            '--extractor-args', 'youtube:player_client=web',
             '-o', os.path.join(tmpdir, '%(id)s'),
         ]
 
         proxy_url = os.environ.get('PROXY_URL')
         if proxy_url:
             cmd.extend(['--proxy', proxy_url])
+            logger.info(f"[yt-dlp] Proxy configuré: {proxy_url.split('@')[-1]}")
 
         cookies_path = get_cookies_path()
         if cookies_path:

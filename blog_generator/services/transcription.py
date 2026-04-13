@@ -47,25 +47,25 @@ def get_transcription(link: str) -> str | None:
 def _get_transcription_api(video_id: str) -> str | None:
     """Récupère la transcription via youtube-transcript-api."""
     cookies_path = get_cookies_path()
+    proxy_url = os.environ.get('PROXY_URL')
 
-    # v1.2.x : cookies via http_client (requests.Session)
-    api_kwargs = {}
+    # Configurer la session requests avec proxy et cookies
+    session = requests.Session()
+    if proxy_url:
+        session.proxies = {'http': proxy_url, 'https': proxy_url}
+
     if cookies_path:
         cj = http.cookiejar.MozillaCookieJar(cookies_path)
         try:
             cj.load(ignore_discard=True, ignore_expires=True)
-            session = requests.Session()
             session.cookies = cj
-            api_kwargs['http_client'] = session
         except Exception as e:
             logger.warning(f"[transcript-api] Impossible de charger les cookies: {e}")
 
-    api = YouTubeTranscriptApi(**api_kwargs)
-    proxy_url = os.environ.get('PROXY_URL')
-    proxies = {'http': proxy_url, 'https': proxy_url} if proxy_url else None
+    api = YouTubeTranscriptApi(http_client=session)
 
     try:
-        data = api.fetch(video_id, languages=['fr', 'en'], proxies=proxies)
+        data = api.fetch(video_id, languages=['fr', 'en'])
         return " ".join([s.text for s in data])
     except (TranscriptsDisabled, NoTranscriptFound) as e:
         logger.warning(f"[transcript-api] Pas de transcript pour {video_id}: {e}")
@@ -74,12 +74,12 @@ def _get_transcription_api(video_id: str) -> str | None:
 
     # Fallback : lister toutes les langues disponibles
     try:
-        transcript_list = api.list(video_id, proxies=proxies)
+        transcript_list = api.list(video_id)
         transcripts = list(transcript_list)
         if not transcripts:
             logger.warning(f"[transcript-api] Aucune langue disponible pour {video_id}")
             return None
-        data = transcripts[0].fetch(proxies=proxies)
+        data = transcripts[0].fetch()
         return " ".join([s.text for s in data])
     except (TranscriptsDisabled, NoTranscriptFound) as e:
         logger.warning(f"[transcript-api] Transcripts désactivés pour {video_id}: {e}")

@@ -28,22 +28,11 @@ def get_transcription(link: str) -> str | None:
     if not video_id:
         return None
 
-    # Essayer yt-dlp avec plusieurs retries (proxy rotatif change d'IP à chaque fois)
+    # Essayer yt-dlp (plus fiable avec proxy)
     logger.info(f"[Transcription] Essai yt-dlp pour {video_id}")
-    for attempt in range(3):
-        logger.info(f"[Transcription] yt-dlp tentative {attempt + 1}/3")
-        result = _get_transcription_ytdlp(video_id)
-        if result:
-            logger.info("[Transcription] Succès via yt-dlp")
-            return result
-        import time
-        time.sleep(2)  # Attendre avant retry
-
-    # Fallback: youtube-transcript-api (marche rarement sur Heroku)
-    logger.info(f"[Transcription] Fallback youtube-transcript-api pour {video_id}")
-    result = _get_transcription_api(video_id)
+    result = _get_transcription_ytdlp(video_id)
     if result:
-        logger.info("[Transcription] Succès via youtube-transcript-api")
+        logger.info("[Transcription] Succès via yt-dlp")
         return result
 
     logger.warning(f"[Transcription] Échec total pour {video_id}")
@@ -143,14 +132,14 @@ def _get_transcription_ytdlp(video_id: str) -> str | None:
         cmd.append(url)
 
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
             logger.info(f"[yt-dlp] returncode={result.returncode}")
             if result.stdout:
                 logger.info(f"[yt-dlp] stdout: {result.stdout[:500]}")
             if result.stderr:
                 logger.error(f"[yt-dlp] stderr: {result.stderr[:1000]}")
         except subprocess.TimeoutExpired:
-            logger.warning("yt-dlp timeout")
+            logger.warning("yt-dlp timeout après 30s")
             return None
         except FileNotFoundError:
             logger.error("yt-dlp not found in PATH")

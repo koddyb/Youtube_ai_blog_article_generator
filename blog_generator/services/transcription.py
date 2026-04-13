@@ -117,7 +117,7 @@ def _get_transcription_ytdlp(video_id: str) -> str | None:
             '--skip-download',
             '--write-subs',
             '--write-auto-subs',
-            '--sub-langs', 'fr,en,fr.*,en.*',
+            '--sub-langs', 'all,-live_chat',  # Toutes les langues sauf live chat
             '--sub-format', 'vtt',
             '--no-warnings',
             '--no-check-formats',

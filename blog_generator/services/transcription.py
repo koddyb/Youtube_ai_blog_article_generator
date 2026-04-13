@@ -22,14 +22,19 @@ logger = logging.getLogger(__name__)
 def get_transcription(link: str) -> str | None:
     """Récupère la transcription avec stratégie multi-fallback.
 
-    Stratégie : yt-dlp avec retries (proxy rotatif) → youtube-transcript-api (local only).
+    Stratégie : youtube-transcript-api → yt-dlp (meilleur anti-bot).
     """
     video_id = extract_video_id(link)
     if not video_id:
         return None
 
-    # Essayer yt-dlp (plus fiable avec proxy)
-    logger.info(f"[Transcription] Essai yt-dlp pour {video_id}")
+    logger.info(f"[Transcription] Essai youtube-transcript-api pour {video_id}")
+    result = _get_transcription_api(video_id)
+    if result:
+        logger.info("[Transcription] Succès via youtube-transcript-api")
+        return result
+
+    logger.info(f"[Transcription] Fallback yt-dlp pour {video_id}")
     result = _get_transcription_ytdlp(video_id)
     if result:
         logger.info("[Transcription] Succès via yt-dlp")
@@ -42,34 +47,20 @@ def get_transcription(link: str) -> str | None:
 def _get_transcription_api(video_id: str) -> str | None:
     """Récupère la transcription via youtube-transcript-api."""
     cookies_path = get_cookies_path()
-    proxy_url = os.environ.get('PROXY_URL')
 
-    logger.info(f"[transcript-api] Configuration - Proxy: {'activé' if proxy_url else 'désactivé'}")
-    if proxy_url:
-        logger.info(f"[transcript-api] Proxy URL: {proxy_url.split('@')[-1]}")  # Log sans credentials
-
-    # Configurer la session requests avec proxy et cookies
-    session = requests.Session()
-    if proxy_url:
-        session.proxies = {'http': proxy_url, 'https': proxy_url}
-        # Headers pour masquer le fait que c'est un script
-        session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.9',
-            'Accept-Encoding': 'gzip, deflate',
-            'Connection': 'keep-alive',
-        })
-
+    # v1.2.x : cookies via http_client (requests.Session)
+    api_kwargs = {}
     if cookies_path:
         cj = http.cookiejar.MozillaCookieJar(cookies_path)
         try:
             cj.load(ignore_discard=True, ignore_expires=True)
+            session = requests.Session()
             session.cookies = cj
+            api_kwargs['http_client'] = session
         except Exception as e:
             logger.warning(f"[transcript-api] Impossible de charger les cookies: {e}")
 
-    api = YouTubeTranscriptApi(http_client=session)
+    api = YouTubeTranscriptApi(**api_kwargs)
 
     try:
         data = api.fetch(video_id, languages=['fr', 'en'])
@@ -106,24 +97,14 @@ def _get_transcription_ytdlp(video_id: str) -> str | None:
             '--skip-download',
             '--write-subs',
             '--write-auto-subs',
-            '--sub-langs', 'all,-live_chat',  # Toutes les langues sauf live chat
+            '--sub-langs', 'fr,en,fr.*,en.*',
             '--sub-format', 'vtt',
             '--no-warnings',
             '--no-check-formats',
             '--ignore-errors',
             '--ignore-no-formats-error',
-            # Options anti-bot
-            '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            '--add-header', 'Accept-Language:en-US,en;q=0.9',
-            '--sleep-requests', '1',
-            '--extractor-args', 'youtube:player_client=web',
             '-o', os.path.join(tmpdir, '%(id)s'),
         ]
-
-        proxy_url = os.environ.get('PROXY_URL')
-        if proxy_url:
-            cmd.extend(['--proxy', proxy_url])
-            logger.info(f"[yt-dlp] Proxy: {proxy_url.split('@')[-1]}")
 
         cookies_path = get_cookies_path()
         if cookies_path:
@@ -132,14 +113,13 @@ def _get_transcription_ytdlp(video_id: str) -> str | None:
         cmd.append(url)
 
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-            logger.info(f"[yt-dlp] returncode={result.returncode}")
-            if result.stdout:
-                logger.info(f"[yt-dlp] stdout: {result.stdout[:500]}")
-            if result.stderr:
-                logger.error(f"[yt-dlp] stderr: {result.stderr[:1000]}")
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+            if result.returncode != 0:
+                logger.info(f"yt-dlp returncode={result.returncode}, checking for subtitle files anyway")
+                if result.stderr:
+                    logger.info(f"yt-dlp stderr: {result.stderr[:500]}")
         except subprocess.TimeoutExpired:
-            logger.warning("yt-dlp timeout après 30s")
+            logger.warning("yt-dlp timeout")
             return None
         except FileNotFoundError:
             logger.error("yt-dlp not found in PATH")
@@ -150,10 +130,8 @@ def _get_transcription_ytdlp(video_id: str) -> str | None:
         if not sub_files:
             sub_files = glob_module.glob(os.path.join(tmpdir, '*.srt'))
         if not sub_files:
-            logger.warning(f"[yt-dlp] Aucun fichier de sous-titres pour {video_id}")
+            logger.warning(f"yt-dlp n'a produit aucun fichier de sous-titres pour {video_id}")
             return None
-
-        logger.info(f"[yt-dlp] Fichiers trouvés: {sub_files}")
 
         # Préférer fr > en > premier disponible
         chosen = sub_files[0]

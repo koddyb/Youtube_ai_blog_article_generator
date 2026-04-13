@@ -1,1 +1,1 @@
-web: gunicorn ai_blog_app.wsgi --log-file - --timeout 120
+web: gunicorn ai_blog_app.wsgi --log-file -

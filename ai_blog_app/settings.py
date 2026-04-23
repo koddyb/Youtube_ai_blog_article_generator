@@ -94,15 +94,34 @@ WSGI_APPLICATION = 'ai_blog_app.wsgi.application'
 # }
 
 # Database - PostgreSQL en conteneur Docker pour VPS
-# En production VPS, pas besoin d'imposer SSL (réseau privé du conteneur)
-# Le SSL ne s'applique que si BD externe (cloud)
-DATABASES = {
-    'default': dj_database_url.config(
-        default=os.getenv('DATABASE_URL'),
-        conn_max_age=600,
-        # ssl_require=False pour conteneur Docker local, True si BD cloud
-    )
-}
+if os.getenv('DATABASE_URL'):
+    # Si DATABASE_URL est définie, l'utiliser
+    DATABASES = {
+        'default': dj_database_url.config(
+            default=os.getenv('DATABASE_URL'),
+            conn_max_age=600,
+        )
+    }
+else:
+    # Sinon, construire l'URL à partir des variables individuelles
+    # (plus robuste pour Docker Compose)
+    db_user = os.getenv('DB_USER', 'ai_blog_user')
+    db_password = os.getenv('DB_PASSWORD', '')
+    db_host = os.getenv('DB_HOST', 'db')
+    db_port = os.getenv('DB_PORT', '5432')
+    db_name = os.getenv('DB_NAME', 'ai_blog_db')
+    
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': db_name,
+            'USER': db_user,
+            'PASSWORD': db_password,
+            'HOST': db_host,
+            'PORT': db_port,
+            'CONN_MAX_AGE': 600,
+        }
+    }
 
 
 # Password validation

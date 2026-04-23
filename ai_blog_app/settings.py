@@ -32,7 +32,11 @@ SECRET_KEY = os.getenv('SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG', 'False') == 'True'
 
-ALLOWED_HOSTS = ['bp-genai-e781afd10fd5.herokuapp.com', 'localhost', '127.0.0.1']
+ALLOWED_HOSTS = [
+    'aib-app.bor-man.dev',
+    'localhost',
+    '127.0.0.1',
+]
 
 
 # Application definition
@@ -89,13 +93,14 @@ WSGI_APPLICATION = 'ai_blog_app.wsgi.application'
 #     }
 # }
 
-#using configuration dictionary dj_database_url
+# Database - PostgreSQL en conteneur Docker pour VPS
+# En production VPS, pas besoin d'imposer SSL (réseau privé du conteneur)
+# Le SSL ne s'applique que si BD externe (cloud)
 DATABASES = {
     'default': dj_database_url.config(
-        # On dit à dj_database_url de chercher la variable 'DATABASE_URL' dans l'environnement
         default=os.getenv('DATABASE_URL'),
         conn_max_age=600,
-        ssl_require=True # Subtilité Heroku : toujours indispensable !
+        # ssl_require=False pour conteneur Docker local, True si BD cloud
     )
 }
 

@@ -3,6 +3,7 @@ services:
    db:
      image: postgres:16-alpine
      container_name: ai-blog-db
+     env_file: .env
      environment:
        POSTGRES_DB: ai_blog_db
        POSTGRES_USER: ai_blog_user
@@ -22,6 +23,7 @@ services:
    web:
      build: .
      container_name: ai-blog-web
+     env_file: .env
      command: >
        sh -c "python manage.py migrate &&
               python manage.py collectstatic --noinput &&
@@ -53,6 +55,7 @@ services:
    traefik:
      image: traefik:v3.1
      container_name: traefik
+     env_file: .env
      command:
       - "--api.insecure=false"
       - "--providers.docker=true"
@@ -79,6 +82,7 @@ services:
    watchtower:
     image: containrrr/watchtower:latest
     container_name: watchtower
+    env_file: .env
     environment:
       - DOCKER_API_VERSION=1.40  # <--- La ligne magique qui règle ton erreur
     command: --label-enable --interval 300 --cleanup

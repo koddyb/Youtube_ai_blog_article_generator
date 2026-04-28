@@ -53,9 +53,11 @@ services:
 
    # Traefik - Reverse Proxy + TLS + Load Balancing
    traefik:
-     image: traefik:v3.1
+     image: traefik:latest
      container_name: traefik
      env_file: .env
+     environment:
+       - DOCKER_API_VERSION=1.40
      command:
       - "--api.insecure=false"
       - "--providers.docker=true"

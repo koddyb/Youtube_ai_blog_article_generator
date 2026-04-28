@@ -13,11 +13,11 @@ services:
        - traefik-network
      restart: unless-stopped
      healthcheck:
-       test: ["CMD-SHELL", "pg_isready -U ai_blog_user"]
+       test: ["CMD-SHELL", "pg_isready -U ai_blog_user -d ai_blog_db"]
        interval: 10s
        timeout: 5s
        retries: 5
- 
+
    # Application Django
    web:
      build: .
@@ -48,23 +48,23 @@ services:
        - "traefik.http.routers.ai-blog.tls.certresolver=myresolver"
        - "traefik.http.services.ai-blog.loadbalancer.server.port=8000"
        - "com.centurylinklabs.watchtower.enable=true"
- 
+
    # Traefik - Reverse Proxy + TLS + Load Balancing
    traefik:
      image: traefik:v3.1
      container_name: traefik
      command:
-       - "--api.insecure=false"
-       - "--providers.docker=true"
-       - "--providers.docker.exposedbydefault=false"
-       - "--providers.docker.network=traefik-network"
-       - "--entrypoints.web.address=:80"
-       - "--entrypoints.websecure.address=:443"
-       - "--entrypoints.web.http.redirections.entrypoint.main=websecure"
-       - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
-       - "--certificatesresolvers.myresolver.acme.tlschallenge=true"
-       - "--certificatesresolvers.myresolver.acme.email=${LETSENCRYPT_EMAIL}"
-       - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
+      - "--api.insecure=false"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.network=traefik-network"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+      - "--certificatesresolvers.myresolver.acme.tlschallenge=true"
+      - "--certificatesresolvers.myresolver.acme.email=${LETSENCRYPT_EMAIL}"
+      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
      ports:
        - "80:80"
        - "443:443"
@@ -74,22 +74,22 @@ services:
      networks:
        - traefik-network
      restart: unless-stopped
- 
+
    # Watchtower - Auto-update des conteneurs
    watchtower:
-     image: containrrr/watchtower:latest
-     container_name: watchtower
-     command: --label-enable --interval 30
-     volumes:
-       - "/var/run/docker.sock:/var/run/docker.sock:ro"
-     networks:
-       - traefik-network
-     restart: unless-stopped
- 
+    image: containrrr/watchtower:latest
+    container_name: watchtower
+    environment:
+      - DOCKER_API_VERSION=1.40  # <--- La ligne magique qui règle ton erreur
+    command: --label-enable --interval 300 --cleanup
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    restart: always
+
 networks:
    traefik-network:
      driver: bridge
- 
+
 volumes:
    postgres_data:
      driver: local
